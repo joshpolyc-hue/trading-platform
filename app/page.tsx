@@ -1,41 +1,88 @@
-import type { Metadata } from 'next';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-export const metadata: Metadata = {
-  title: 'LumaTrade | Trade with discipline',
-  description: 'A real-time trading platform for learning, practicing, and managing risk before going live.',
+type Trade = {
+  id: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  entry: number;
+  status: string;
+  notes: string;
+  createdAt: string;
 };
 
-const features = [
-  {
-    title: 'Real-time market visibility',
-    text: 'Monitor live-style market action across stocks, crypto, and FX with alerts and analyst context.',
-  },
-  {
-    title: 'Paper trading safety',
-    text: 'Practice strategies with zero financial risk before opening a live account or moving to execution.',
-  },
-  {
-    title: 'Built-in trader education',
-    text: 'Learn risk rules, journaling, setups, and position management through guided modules.',
-  },
-  {
-    title: 'Discipline-first tools',
-    text: 'Set stop-loss rules, maximum daily risk, and journal every trade so you improve instead of gambling.',
-  },
-];
+export default function TradingPage() {
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [form, setForm] = useState({
+    symbol: 'AAPL',
+    side: 'buy',
+    qty: '10',
+    entry: '214.28',
+    notes: 'Opening disciplined position',
+  });
 
-const metrics = [
-  { value: '24/7', label: 'Market monitoring' },
-  { value: '3x', label: 'Risk controls' },
-  { value: '1.2K', label: 'Strategy lessons' },
-  { value: '99.9%', label: 'Demo uptime' },
-];
+  useEffect(() => {
+    const loadTrades = async () => {
+      const response = await fetch('/api/paper-trades');
+      const json = await response.json();
+      setTrades(json.trades || []);
+    };
 
-export default function Home() {
+    loadTrades();
+  }, []);
+
+  const openPositions = useMemo(() => {
+    const grouped = new Map<string, { symbol: string; qty: number; avgEntry: number; side: string }>();
+
+    trades.forEach((trade) => {
+      if (trade.status !== 'open') return;
+      const key = trade.symbol;
+      const current = grouped.get(key) || { symbol: trade.symbol, qty: 0, avgEntry: 0, side: trade.side };
+      current.qty += trade.side === 'buy' ? Number(trade.qty) : -Number(trade.qty);
+      current.avgEntry = trade.entry;
+      current.side = current.qty >= 0 ? 'long' : 'short';
+      grouped.set(key, current);
+    });
+
+    return Array.from(grouped.values()).filter((item) => item.qty !== 0);
+  }, [trades]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const payload = {
+      symbol: form.symbol,
+      side: form.side,
+      qty: Number(form.qty),
+      entry: Number(form.entry),
+      notes: form.notes,
+    };
+
+    const response = await fetch('/api/paper-trades', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      setTrades((current) => [json.trade, ...current]);
+      setForm({
+        symbol: 'AAPL',
+        side: 'buy',
+        qty: '10',
+        entry: '214.28',
+        notes: 'Opening disciplined position',
+      });
+    }
+  };
+
   return (
-    <main className="page-shell">
-      <header className="topbar">
+    <main className="dashboard-shell">
+      <header className="dashboard-topbar">
         <div className="brand-wrap">
           <div className="brand-mark">L</div>
           <span>LumaTrade</span>
@@ -43,90 +90,110 @@ export default function Home() {
         <nav className="nav">
           <Link href="/">Home</Link>
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/trading">Paper Trading</Link>
           <Link href="/training">Training</Link>
         </nav>
-        <Link href="/dashboard" className="primary-button">
-          Open demo
-        </Link>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="eyebrow">Real-time trading education</span>
-          <h1>Trade smarter with tools built for discipline.</h1>
-          <p>
-            Learn, simulate, and analyze the markets in one place. Our platform helps traders build
-            stronger habits, manage risk, and improve execution before they ever place real capital at risk.
-          </p>
-          <div className="hero-actions">
-            <Link href="/dashboard" className="primary-button">
-              View dashboard
-            </Link>
-            <Link href="/training" className="secondary-button">
-              Learn the system
-            </Link>
-          </div>
-          <div className="metric-row">
-            {metrics.map((item) => (
-              <div key={item.label} className="metric-box">
-                <strong>{item.value}</strong>
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
+      <section className="trading-layout">
+        <div className="panel-card form-panel">
+          <h3>Paper trade journal</h3>
+          <form className="trade-form" onSubmit={handleSubmit}>
+            <label>
+              Symbol
+              <input
+                value={form.symbol}
+                onChange={(event) => setForm((current) => ({ ...current, symbol: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Side
+              <select
+                value={form.side}
+                onChange={(event) => setForm((current) => ({ ...current, side: event.target.value as 'buy' | 'sell' }))}
+              >
+                <option value="buy">Buy / Long</option>
+                <option value="sell">Sell / Short</option>
+              </select>
+            </label>
+
+            <label>
+              Quantity
+              <input
+                type="number"
+                min="1"
+                value={form.qty}
+                onChange={(event) => setForm((current) => ({ ...current, qty: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Entry price
+              <input
+                type="number"
+                step="0.01"
+                value={form.entry}
+                onChange={(event) => setForm((current) => ({ ...current, entry: event.target.value }))}
+              />
+            </label>
+
+            <label>
+              Notes
+              <textarea
+                rows={3}
+                value={form.notes}
+                onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+              />
+            </label>
+
+            <button className="primary-button" type="submit">Place paper trade</button>
+          </form>
         </div>
 
-        <div className="hero-panel">
-          <div className="panel-header">
-            <span>Market pulse</span>
-            <span className="alive-dot">Live</span>
-          </div>
-
-          <div className="ticker-list">
-            <div className="ticker-item">
-              <span>NASDAQ</span>
-              <strong>18,924.31</strong>
-              <em className="up">+1.24%</em>
-            </div>
-            <div className="ticker-item">
-              <span>BTC/USD</span>
-              <strong>$67,420.12</strong>
-              <em className="up">+2.61%</em>
-            </div>
-            <div className="ticker-item">
-              <span>EUR/USD</span>
-              <strong>1.0854</strong>
-              <em className="down">-0.17%</em>
-            </div>
-          </div>
-
-          <div className="mini-chart" aria-label="Market chart">
-            <span className="bar b1" />
-            <span className="bar b2" />
-            <span className="bar b3" />
-            <span className="bar b4" />
-            <span className="bar b5" />
-            <span className="bar b6" />
-            <span className="bar b7" />
-            <span className="bar b8" />
+        <div className="panel-card trade-summary">
+          <h3>Open positions</h3>
+          <div className="position-list">
+            {openPositions.length === 0 ? (
+              <p>No open positions. Build a plan before taking the next trade.</p>
+            ) : (
+              openPositions.map((position) => (
+                <div className="position-item" key={position.symbol}>
+                  <div>
+                    <strong>{position.symbol}</strong>
+                    <span>{position.side}</span>
+                  </div>
+                  <div>
+                    <strong>{position.qty}</strong>
+                    <span>Shares</span>
+                  </div>
+                  <div>
+                    <strong>{position.avgEntry}</strong>
+                    <span>Avg entry</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
 
-      <section className="feature-section">
-        <div className="section-heading">
-          <span className="eyebrow">Why this platform</span>
-          <h2>Built around risk control, not hype.</h2>
-        </div>
-
-        <div className="feature-grid">
-          {features.map((feature) => (
-            <article key={feature.title} className="feature-card">
-              <div className="feature-icon">✓</div>
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </article>
-          ))}
+      <section className="panel-card trade-history-block">
+        <h3>Trade history</h3>
+        <div className="trade-history-list">
+          {trades.length === 0 ? (
+            <p>No trades yet. Record your first disciplined setup.</p>
+          ) : (
+            trades.map((trade) => (
+              <div key={trade.id} className="trade-row">
+                <span>{trade.symbol}</span>
+                <span>{trade.side}</span>
+                <span>{trade.qty} qty</span>
+                <span>${trade.entry}</span>
+                <span>{trade.notes}</span>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </main>

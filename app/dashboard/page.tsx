@@ -1,27 +1,44 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 
-const watchlist = [
-  { symbol: 'AAPL', price: 214.28, change: 1.8 },
-  { symbol: 'NVDA', price: 922.11, change: 2.7 },
-  { symbol: 'BTC', price: 67420.12, change: 3.1 },
-  { symbol: 'ETH', price: 3514.67, change: 1.4 },
-  { symbol: 'EUR/USD', price: 1.0854, change: -0.2 },
-];
-
-const positions = [
-  { side: 'Long', symbol: 'AAPL', qty: 55, pnl: '+$1,240.40', risk: '0.8%' },
-  { side: 'Short', symbol: 'ETH', qty: 2, pnl: '+$310.90', risk: '0.6%' },
-  { side: 'Long', symbol: 'NASDAQ', qty: 12, pnl: '+$680.25', risk: '0.9%' },
-];
-
-const plan = [
-  'Set risk budget before placing a trade',
-  'Review the market context and trend quality',
-  'Use rules for entries, exits, and stop-loss levels',
-  'Journal every trade and assess execution quality',
-];
+type MarketItem = {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  type: string;
+};
 
 export default function DashboardPage() {
+  const [market, setMarket] = useState<MarketItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      const response = await fetch('/api/market');
+      const json = await response.json();
+      setMarket(json.snapshot || []);
+      setLoading(false);
+    };
+
+    load();
+    const timer = window.setInterval(load, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const stats = useMemo(
+    () => [
+      { label: 'Open P&L', value: '$4,840.20' },
+      { label: 'Win rate', value: '62.4%' },
+      { label: 'Avg. R', value: '+1.42R' },
+      { label: 'Max DD', value: '7.8%' },
+    ],
+    []
+  );
+
   return (
     <main className="dashboard-shell">
       <header className="dashboard-topbar">
@@ -32,6 +49,7 @@ export default function DashboardPage() {
         <nav className="nav">
           <Link href="/">Home</Link>
           <Link href="/dashboard">Dashboard</Link>
+          <Link href="/trading">Paper Trading</Link>
           <Link href="/training">Training</Link>
         </nav>
       </header>
@@ -58,51 +76,48 @@ export default function DashboardPage() {
           <div className="panel-card">
             <h3>Today&apos;s checklist</h3>
             <ul className="check-list">
-              {plan.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
+              <li>Set risk budget before placing a trade</li>
+              <li>Review the market context and trend quality</li>
+              <li>Use rules for entries, exits, and stop-loss levels</li>
+              <li>Journal every trade and assess execution quality</li>
             </ul>
           </div>
         </aside>
 
         <div className="main-panel">
           <div className="stats-row">
-            <div className="stat-card">
-              <span>Open P&L</span>
-              <strong>$4,840.20</strong>
-            </div>
-            <div className="stat-card">
-              <span>Win rate</span>
-              <strong>62.4%</strong>
-            </div>
-            <div className="stat-card">
-              <span>Avg. R multiple</span>
-              <strong>+1.42R</strong>
-            </div>
-            <div className="stat-card">
-              <span>Max drawdown</span>
-              <strong>7.8%</strong>
-            </div>
+            {stats.map((stat) => (
+              <div key={stat.label} className="stat-card">
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+              </div>
+            ))}
           </div>
 
           <div className="content-grid">
             <div className="panel-card wide-card">
               <div className="card-header">
                 <h3>Market watch</h3>
-                <button className="secondary-button small">Refresh</button>
+                <button className="secondary-button small" type="button">
+                  Refresh
+                </button>
               </div>
 
               <div className="watchlist">
-                {watchlist.map((item) => (
-                  <div key={item.symbol} className="watch-row">
-                    <span>{item.symbol}</span>
-                    <strong>{item.price}</strong>
-                    <em className={item.change >= 0 ? 'up' : 'down'}>
-                      {item.change >= 0 ? '+' : ''}
-                      {item.change}%
-                    </em>
-                  </div>
-                ))}
+                {loading ? (
+                  <p>Loading market data...</p>
+                ) : (
+                  market.map((item) => (
+                    <div key={item.symbol} className="watch-row">
+                      <span>{item.symbol}</span>
+                      <strong>{item.price}</strong>
+                      <em className={item.change >= 0 ? 'up' : 'down'}>
+                        {item.change >= 0 ? '+' : ''}
+                        {item.change}%
+                      </em>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -112,22 +127,34 @@ export default function DashboardPage() {
               </div>
 
               <div className="position-list">
-                {positions.map((position) => (
-                  <div key={`${position.symbol}-${position.side}`} className="position-item">
-                    <div>
-                      <strong>{position.symbol}</strong>
-                      <span>{position.side}</span>
-                    </div>
-                    <div>
-                      <strong>{position.qty}</strong>
-                      <span>Qty</span>
-                    </div>
-                    <div>
-                      <strong>{position.pnl}</strong>
-                      <span>{position.risk}</span>
-                    </div>
+                <div className="position-item">
+                  <div>
+                    <strong>AAPL</strong>
+                    <span>Long</span>
                   </div>
-                ))}
+                  <div>
+                    <strong>55</strong>
+                    <span>Qty</span>
+                  </div>
+                  <div>
+                    <strong>+$1,240.40</strong>
+                    <span>0.8%</span>
+                  </div>
+                </div>
+                <div className="position-item">
+                  <div>
+                    <strong>ETH</strong>
+                    <span>Short</span>
+                  </div>
+                  <div>
+                    <strong>2</strong>
+                    <span>Qty</span>
+                  </div>
+                  <div>
+                    <strong>+$310.90</strong>
+                    <span>0.6%</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
